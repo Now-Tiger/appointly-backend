@@ -1,7 +1,7 @@
 import Fastify, { FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
-import tenantsRoute from "./routes/tenants.route";
+import prismaPlugin from "./plugins/prisma";
 
 /**
  * Composition root — builds and returns a fully configured Fastify
@@ -20,7 +20,7 @@ export const buildApp = async (): Promise<FastifyInstance> => {
 
   await app.register(cors);
   await app.register(helmet);
-  await app.register(tenantsRoute, { prefix: "/v1"})
+  await app.register(prismaPlugin);
 
   app.get("/", async () => ({ success: true, status: 200, message: 'Home page' }));
   app.get("/health", async () => ({ sucess: true, status: 200, message: 'Health check Ok!' }));
