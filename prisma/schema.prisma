@@ -1,0 +1,823 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ENUMS
+enum TenantStatus {
+  ONBOARDING
+  ACTIVE
+  SUSPENDED
+  CHURNED
+}
+
+enum SubscriptionPlan {
+  STARTER
+  GROWTH
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+enum StaffRole {
+  OWNER
+  MANAGER
+  STAFF
+  READONLY
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum AppointmentType {
+  INDIVIDUAL
+  GROUP
+  RECURRING
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum NotificationChannel {
+  WHATSAPP
+  EMAIL
+  PUSH
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+  BOUNCED
+}
+
+enum WebhookEventStatus {
+  RECEIVED
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum IntegrationType {
+  GOOGLE_CALENDAR
+  OUTLOOK_CALENDAR
+  STRIPE
+  ZAPIER
+  MAKE
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+// PHASE 6: ORGANIZATION (multi-branch / agency hierarchy)
+model Organization {
+  id   String @id @default(uuid()) @db.Uuid
+  name String @db.VarChar(255)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenants Tenant[]
+
+  @@map("organizations")
+}
+
+// PHASE 0: TENANT
+model Tenant {
+  id     String       @id @default(uuid()) @db.Uuid
+  name   String       @db.VarChar(255)
+  slug   String       @unique @db.VarChar(100)
+  status TenantStatus @default(ONBOARDING)
+
+  organizationId String?       @map("organization_id") @db.Uuid
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  businessProfile            BusinessProfile?
+  staffMembers               StaffMember[]
+  services                   Service[]
+  customers                  Customer[]
+  appointments               Appointment[]
+  businessHours              BusinessHours[]
+  blockedSlots               BlockedSlot[]
+  notificationTemplates      NotificationTemplate[]
+  subscriptions              Subscription[]
+  invoices                   Invoice[]
+  usageRecords               UsageRecord[]
+  auditLogs                  AuditLog[]
+  apiKeys                    ApiKey[]
+  outboundWebhookConfigs     OutboundWebhookConfig[]
+  waitingListEntries         WaitingListEntry[]
+  recurringAppointmentSeries RecurringAppointmentSeries[]
+  faqs                       Faq[]
+  locations                  Location[]
+
+  @@map("tenants")
+}
+
+// PHASE 0: BUSINESS PROFILE (one per tenant)
+model BusinessProfile {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @unique @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  businessName String  @map("business_name") @db.VarChar(255)
+  description  String? @db.Text
+  phone        String? @db.VarChar(20)
+  email        String? @db.VarChar(255)
+  website      String? @db.VarChar(500)
+  address      String? @db.Text
+  city         String? @db.VarChar(100)
+  state        String? @db.VarChar(100)
+  country      String? @db.VarChar(100)
+  postalCode   String? @map("postal_code") @db.VarChar(20)
+  timezone     String  @default("UTC") @db.VarChar(50)
+
+  whatsappPhoneNumberId     String? @map("whatsapp_phone_number_id") @db.VarChar(50)
+  whatsappBusinessAccountId String? @map("whatsapp_business_account_id") @db.VarChar(50)
+  whatsappVerified          Boolean @default(false) @map("whatsapp_verified")
+
+  logoUrl      String? @map("logo_url") @db.VarChar(500)
+  brandColor   String? @map("brand_color") @db.VarChar(7)
+  customDomain String? @map("custom_domain") @db.VarChar(255)
+
+  defaultBufferMinutes  Int    @default(15) @map("default_buffer_minutes")
+  maxConcurrentBookings Int    @default(1) @map("max_concurrent_bookings")
+  locale                String @default("en") @db.VarChar(10)
+
+  onboardingCompletedAt DateTime? @map("onboarding_completed_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@map("business_profiles")
+}
+
+// PHASE 6: LOCATION (multi-branch)
+model Location {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name       String  @db.VarChar(255)
+  address    String? @db.Text
+  city       String? @db.VarChar(100)
+  state      String? @db.VarChar(100)
+  country    String? @db.VarChar(100)
+  postalCode String? @map("postal_code") @db.VarChar(20)
+  phone      String? @db.VarChar(20)
+  timezone   String  @default("UTC") @db.VarChar(50)
+  isActive   Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  staffMembers StaffMember[]
+  appointments Appointment[]
+
+  @@index([tenantId])
+  @@map("locations")
+}
+
+// PHASE 0: STAFF MEMBER
+model StaffMember {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  externalAuthId String    @map("external_auth_id") @db.VarChar(255)
+  email          String    @db.VarChar(255)
+  fullName       String    @map("full_name") @db.VarChar(255)
+  phone          String?   @db.VarChar(20)
+  role           StaffRole @default(STAFF)
+  avatarUrl      String?   @map("avatar_url") @db.VarChar(500)
+  isActive       Boolean   @default(true) @map("is_active")
+
+  locationId String?   @map("location_id") @db.Uuid
+  location   Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  appointments   Appointment[]
+  staffSchedules StaffSchedule[]
+  deviceTokens   DeviceToken[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([externalAuthId])
+  @@map("staff_members")
+}
+
+// PHASE 1: SERVICE (bookable service catalog)
+
+model Service {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name            String          @db.VarChar(255)
+  description     String?         @db.Text
+  durationMinutes Int             @map("duration_minutes")
+  price           Decimal         @default(0) @db.Decimal(10, 2)
+  currency        String          @default("USD") @db.VarChar(3)
+  isActive        Boolean         @default(true) @map("is_active")
+  sortOrder       Int             @default(0) @map("sort_order")
+  appointmentType AppointmentType @default(INDIVIDUAL) @map("appointment_type")
+  capacityLimit   Int?            @map("capacity_limit")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  appointments Appointment[]
+
+  @@index([tenantId])
+  @@map("services")
+}
+
+// PHASE 1: CUSTOMER (WhatsApp end-users)
+
+model Customer {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  whatsappPhoneNumber String  @map("whatsapp_phone_number") @db.VarChar(20)
+  fullName            String? @map("full_name") @db.VarChar(255)
+  email               String? @db.VarChar(255)
+  notes               String? @db.Text
+  locale              String  @default("en") @db.VarChar(10)
+
+  totalAppointments Int     @default(0) @map("total_appointments")
+  totalNoShows      Int     @default(0) @map("total_no_shows")
+  totalSpent        Decimal @default(0) @map("total_spent") @db.Decimal(10, 2)
+
+  lastInteractionAt DateTime? @map("last_interaction_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  appointments       Appointment[]
+  waitingListEntries WaitingListEntry[]
+
+  @@unique([tenantId, whatsappPhoneNumber])
+  @@index([tenantId])
+  @@map("customers")
+}
+
+// PHASE 4: PAYMENT INTENT
+
+model PaymentIntent {
+  id String @id @default(uuid()) @db.Uuid
+
+  stripePaymentIntentId String? @map("stripe_payment_intent_id") @db.VarChar(255)
+  stripePaymentLinkUrl  String? @map("stripe_payment_link_url") @db.VarChar(500)
+
+  amount         Decimal       @db.Decimal(10, 2)
+  currency       String        @default("USD") @db.VarChar(3)
+  status         PaymentStatus @default(PENDING)
+  refundedAmount Decimal       @default(0) @map("refunded_amount") @db.Decimal(10, 2)
+
+  paidAt     DateTime? @map("paid_at")
+  refundedAt DateTime? @map("refunded_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  appointments Appointment[]
+
+  @@index([stripePaymentIntentId])
+  @@map("payment_intents")
+}
+
+// PHASE 4: RECURRING APPOINTMENT SERIES
+
+model RecurringAppointmentSeries {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  serviceId  String @map("service_id") @db.Uuid
+  staffId    String @map("staff_id") @db.Uuid
+  customerId String @map("customer_id") @db.Uuid
+
+  recurrenceRule String    @map("recurrence_rule") @db.VarChar(255)
+  startDate      DateTime  @map("start_date")
+  endDate        DateTime? @map("end_date")
+  maxOccurrences Int?      @map("max_occurrences")
+  isActive       Boolean   @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  appointments Appointment[]
+
+  @@index([tenantId])
+  @@map("recurring_appointment_series")
+}
+
+// PHASE 1: APPOINTMENT (core aggregate)
+
+model Appointment {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  serviceId String  @map("service_id") @db.Uuid
+  service   Service @relation(fields: [serviceId], references: [id])
+
+  staffId String      @map("staff_id") @db.Uuid
+  staff   StaffMember @relation(fields: [staffId], references: [id])
+
+  customerId String   @map("customer_id") @db.Uuid
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  recurringSeriesId String?                     @map("recurring_series_id") @db.Uuid
+  recurringSeries   RecurringAppointmentSeries? @relation(fields: [recurringSeriesId], references: [id], onDelete: SetNull)
+
+  locationId String?   @map("location_id") @db.Uuid
+  location   Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  status    AppointmentStatus @default(PENDING)
+  startTime DateTime          @map("start_time")
+  endTime   DateTime          @map("end_time")
+  notes     String?           @db.Text
+
+  noShowRiskScore Float? @map("no_show_risk_score")
+
+  paymentIntentId String?        @map("payment_intent_id") @db.Uuid
+  paymentIntent   PaymentIntent? @relation(fields: [paymentIntentId], references: [id], onDelete: SetNull)
+
+  bookedVia    String    @default("whatsapp") @map("booked_via") @db.VarChar(20)
+  cancelledAt  DateTime? @map("cancelled_at")
+  cancelReason String?   @map("cancel_reason") @db.VarChar(500)
+  completedAt  DateTime? @map("completed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  deliveryAttempts   DeliveryAttempt[]
+  waitingListEntries WaitingListEntry[]
+
+  @@unique([tenantId, staffId, startTime])
+  @@index([tenantId, status])
+  @@index([tenantId, startTime])
+  @@index([tenantId, staffId, startTime])
+  @@index([customerId])
+  @@map("appointments")
+}
+
+// PHASE 1: BUSINESS HOURS (weekly schedule)
+
+model BusinessHours {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  dayOfWeek DayOfWeek @map("day_of_week")
+  startTime String    @map("start_time") @db.VarChar(5)
+  endTime   String    @map("end_time") @db.VarChar(5)
+  isEnabled Boolean   @default(true) @map("is_enabled")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, dayOfWeek])
+  @@index([tenantId])
+  @@map("business_hours")
+}
+
+// PHASE 1: STAFF SCHEDULE (per-staff overrides)
+
+model StaffSchedule {
+  id      String      @id @default(uuid()) @db.Uuid
+  staffId String      @map("staff_id") @db.Uuid
+  staff   StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  dayOfWeek DayOfWeek @map("day_of_week")
+  startTime String    @map("start_time") @db.VarChar(5)
+  endTime   String    @map("end_time") @db.VarChar(5)
+  isEnabled Boolean   @default(true) @map("is_enabled")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([staffId, dayOfWeek])
+  @@index([staffId])
+  @@map("staff_schedules")
+}
+
+// PHASE 1: BLOCKED SLOT (ad-hoc unavailability)
+
+model BlockedSlot {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  staffId   String?  @map("staff_id") @db.Uuid
+  startTime DateTime @map("start_time")
+  endTime   DateTime @map("end_time")
+  reason    String?  @db.VarChar(500)
+  isAllDay  Boolean  @default(false) @map("is_all_day")
+
+  externalCalendarEventId String? @map("external_calendar_event_id") @db.VarChar(255)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantId, startTime, endTime])
+  @@index([staffId])
+  @@map("blocked_slots")
+}
+
+// PHASE 1: NOTIFICATION TEMPLATE 
+
+model NotificationTemplate {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name    String              @db.VarChar(255)
+  channel NotificationChannel
+  subject String?             @db.VarChar(500)
+  body    String              @db.Text
+  locale  String              @default("en") @db.VarChar(10)
+
+  whatsappTemplateName   String? @map("whatsapp_template_name") @db.VarChar(255)
+  whatsappTemplateStatus String? @map("whatsapp_template_status") @db.VarChar(50)
+
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantId, channel])
+  @@map("notification_templates")
+}
+
+// PHASE 1: DELIVERY ATTEMPT (notification audit trail)
+
+model DeliveryAttempt {
+  id String @id @default(uuid()) @db.Uuid
+
+  appointmentId String?      @map("appointment_id") @db.Uuid
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  channel   NotificationChannel
+  recipient String              @db.VarChar(255)
+  status    DeliveryStatus      @default(PENDING)
+
+  externalMessageId String? @map("external_message_id") @db.VarChar(255)
+  idempotencyKey    String  @unique @map("idempotency_key") @db.VarChar(255)
+
+  payload      Json?
+  errorMessage String? @map("error_message") @db.Text
+
+  sentAt      DateTime? @map("sent_at")
+  deliveredAt DateTime? @map("delivered_at")
+  failedAt    DateTime? @map("failed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([appointmentId])
+  @@index([idempotencyKey])
+  @@index([status])
+  @@map("delivery_attempts")
+}
+
+// PHASE 2: DEVICE TOKEN (mobile push notifications)
+
+model DeviceToken {
+  id      String      @id @default(uuid()) @db.Uuid
+  staffId String      @map("staff_id") @db.Uuid
+  staff   StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  token    String  @db.VarChar(500)
+  platform String  @db.VarChar(10)
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([staffId, token])
+  @@index([staffId])
+  @@map("device_tokens")
+}
+
+// PHASE 2: SUBSCRIPTION (Stripe billing)
+
+model Subscription {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  plan   SubscriptionPlan   @default(STARTER)
+  status SubscriptionStatus @default(TRIALING)
+
+  stripeCustomerId     String? @map("stripe_customer_id") @db.VarChar(255)
+  stripeSubscriptionId String? @map("stripe_subscription_id") @db.VarChar(255)
+  stripePriceId        String? @map("stripe_price_id") @db.VarChar(255)
+
+  monthlyAppointmentLimit Int? @map("monthly_appointment_limit")
+
+  currentPeriodStart DateTime? @map("current_period_start")
+  currentPeriodEnd   DateTime? @map("current_period_end")
+  trialEndsAt        DateTime? @map("trial_ends_at")
+  cancelledAt        DateTime? @map("cancelled_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantId])
+  @@index([stripeCustomerId])
+  @@index([stripeSubscriptionId])
+  @@map("subscriptions")
+}
+
+// PHASE 2: INVOICE
+
+model Invoice {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  stripeInvoiceId String?   @map("stripe_invoice_id") @db.VarChar(255)
+  amountDue       Decimal   @map("amount_due") @db.Decimal(10, 2)
+  amountPaid      Decimal   @default(0) @map("amount_paid") @db.Decimal(10, 2)
+  currency        String    @default("USD") @db.VarChar(3)
+  status          String    @db.VarChar(50)
+  periodStart     DateTime  @map("period_start")
+  periodEnd       DateTime  @map("period_end")
+  paidAt          DateTime? @map("paid_at")
+  invoicePdfUrl   String?   @map("invoice_pdf_url") @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantId])
+  @@index([stripeInvoiceId])
+  @@map("invoices")
+}
+
+// PHASE 2: USAGE RECORD (per billing period)
+
+model UsageRecord {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  periodStart          DateTime @map("period_start")
+  periodEnd            DateTime @map("period_end")
+  appointmentCount     Int      @default(0) @map("appointment_count")
+  whatsappMessageCount Int      @default(0) @map("whatsapp_message_count")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, periodStart])
+  @@index([tenantId])
+  @@map("usage_records")
+}
+
+// PHASE 1: WEBHOOK EVENT (inbound event log)
+
+model WebhookEvent {
+  id     String @id @default(uuid()) @db.Uuid
+  source String @db.VarChar(50)
+
+  externalId     String             @map("external_id") @db.VarChar(255)
+  idempotencyKey String             @unique @map("idempotency_key") @db.VarChar(255)
+  status         WebhookEventStatus @default(RECEIVED)
+  payload        Json
+
+  errorMessage String?   @map("error_message") @db.Text
+  processedAt  DateTime? @map("processed_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@index([idempotencyKey])
+  @@index([source, externalId])
+  @@map("webhook_events")
+}
+
+// PHASE 2: ANALYTICS DAILY (pre-aggregated)
+
+model AnalyticsDaily {
+  id       String   @id @default(uuid()) @db.Uuid
+  tenantId String   @map("tenant_id") @db.Uuid
+  date     DateTime @db.Date
+
+  totalBookings     Int     @default(0) @map("total_bookings")
+  completedBookings Int     @default(0) @map("completed_bookings")
+  cancelledBookings Int     @default(0) @map("cancelled_bookings")
+  noShows           Int     @default(0) @map("no_shows")
+  revenueCollected  Decimal @default(0) @map("revenue_collected") @db.Decimal(10, 2)
+
+  peakHour     Int?    @map("peak_hour")
+  topServiceId String? @map("top_service_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, date])
+  @@index([tenantId, date])
+  @@map("analytics_daily")
+}
+
+// PHASE 3: AUDIT LOG (immutable) 
+
+model AuditLog {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  actorId   String      @map("actor_id") @db.Uuid
+  actorType String      @map("actor_type") @db.VarChar(20)
+  action    AuditAction
+
+  entityType String @map("entity_type") @db.VarChar(100)
+  entityId   String @map("entity_id") @db.Uuid
+
+  before   Json?
+  after    Json?
+  metadata Json?
+
+  ipAddress String? @map("ip_address") @db.VarChar(45)
+  userAgent String? @map("user_agent") @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, createdAt])
+  @@map("audit_logs")
+}
+
+// PHASE 4: WAITING LIST
+
+model WaitingListEntry {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  appointmentId String?      @map("appointment_id") @db.Uuid
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  customerId String   @map("customer_id") @db.Uuid
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  serviceId     String   @map("service_id") @db.Uuid
+  requestedDate DateTime @map("requested_date")
+  position      Int
+
+  notifiedAt DateTime? @map("notified_at")
+  promotedAt DateTime? @map("promoted_at")
+  expiredAt  DateTime? @map("expired_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantId, serviceId, requestedDate])
+  @@map("waiting_list_entries")
+}
+
+// PHASE 4: INTEGRATION CONNECTION
+
+model IntegrationConnection {
+  id       String          @id @default(uuid()) @db.Uuid
+  tenantId String          @map("tenant_id") @db.Uuid
+  staffId  String?         @map("staff_id") @db.Uuid
+  type     IntegrationType
+
+  accessToken       String? @map("access_token") @db.Text
+  refreshToken      String? @map("refresh_token") @db.Text
+  externalAccountId String? @map("external_account_id") @db.VarChar(255)
+
+  tokenExpiresAt DateTime? @map("token_expires_at")
+  isActive       Boolean   @default(true) @map("is_active")
+  lastSyncAt     DateTime? @map("last_sync_at")
+  syncError      String?   @map("sync_error") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, staffId, type])
+  @@index([tenantId])
+  @@map("integration_connections")
+}
+
+// PHASE 4: API KEY (public API access)
+
+model ApiKey {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  name    String @db.VarChar(255)
+  keyHash String @unique @map("key_hash") @db.VarChar(255)
+  prefix  String @db.VarChar(10)
+
+  lastUsedAt DateTime? @map("last_used_at")
+  expiresAt  DateTime? @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId])
+  @@index([keyHash])
+  @@map("api_keys")
+}
+
+// PHASE 4: OUTBOUND WEBHOOK CONFIG ──
+
+model OutboundWebhookConfig {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  url      String   @db.VarChar(500)
+  secret   String   @db.VarChar(255)
+  events   String[]
+  isActive Boolean  @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  deliveries OutboundWebhookDelivery[]
+
+  @@index([tenantId])
+  @@map("outbound_webhook_configs")
+}
+
+// PHASE 4: OUTBOUND WEBHOOK DELIVERY
+
+model OutboundWebhookDelivery {
+  id       String                @id @default(uuid()) @db.Uuid
+  configId String                @map("config_id") @db.Uuid
+  config   OutboundWebhookConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  eventType  String  @map("event_type") @db.VarChar(100)
+  payload    Json
+  httpStatus Int?    @map("http_status")
+  response   String? @db.Text
+  attempts   Int     @default(0)
+
+  succeededAt DateTime? @map("succeeded_at")
+  failedAt    DateTime? @map("failed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([configId])
+  @@map("outbound_webhook_deliveries")
+}
+
+// PHASE 5: FAQ (with vector embedding for similarity search)
+
+model Faq {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  question String @db.Text
+  answer   String @db.Text
+
+  similarityThreshold Float   @default(0.8) @map("similarity_threshold")
+  isActive            Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantId])
+  @@map("faqs")
+}
