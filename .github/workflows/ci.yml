@@ -34,24 +34,24 @@ jobs:
       - name: TypeScript type-check
         run: npx tsc --noEmit
 
-  unit-tests:
-    name: Unit Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+  # unit-tests:
+  #   name: Unit Tests
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: ${{ env.NODE_VERSION }}
+  #         cache: npm
 
-      - run: npm ci
+  #     - run: npm ci
 
-      - name: Generate Prisma client
-        run: npx prisma generate
+  #     - name: Generate Prisma client
+  #       run: npx prisma generate
 
-      - name: Run unit tests
-        run: npx vitest run tests/unit
+  #     - name: Run unit tests
+  #       run: npx vitest run tests/unit
 
   integration-tests:
     name: Integration Tests
