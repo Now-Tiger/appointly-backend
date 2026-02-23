@@ -64,7 +64,7 @@ async function main() {
     data: { name: "HealthFirst Network" },
   });
 
-  console.log("  ✅ Organizations");
+  console.log("✅ Organizations");
 
   // ═══════════════════════════════════════════════════════════════════════════
   // TENANTS — covers every TenantStatus + org-attached vs standalone
@@ -366,7 +366,7 @@ async function main() {
     },
   });
 
-  const gymOwner = await prisma.staffMember.create({
+  await prisma.staffMember.create({
     data: {
       tenantId: fitZoneGym.id,
       externalAuthId: "auth0|fitzone_owner_001",
@@ -465,7 +465,7 @@ async function main() {
     },
   });
 
-  const svcGroupWellness = await prisma.service.create({
+  await prisma.service.create({
     data: {
       tenantId: sunriseClinic.id,
       name: "Group Wellness Workshop",
@@ -514,7 +514,7 @@ async function main() {
     },
   });
 
-  const svcHIIT = await prisma.service.create({
+  await prisma.service.create({
     data: {
       tenantId: fitZoneGym.id,
       name: "HIIT Group Class",
@@ -540,7 +540,7 @@ async function main() {
     },
   });
 
-  const svcMath = await prisma.service.create({
+  await prisma.service.create({
     data: {
       tenantId: eliteTutoring.id,
       name: "Mathematics (1-on-1)",
